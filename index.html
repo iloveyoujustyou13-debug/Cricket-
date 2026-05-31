@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cricket Broadcast Pro - Control Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; }
+    </style>
+</head>
+<body class="p-6 font-sans">
+
+    <header class="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
+        <h1 class="text-2xl font-black tracking-wider text-rose-500">CRICKET BROADCAST PRO</h1>
+        <div>
+            <span id="studioStatus" class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                <span id="statusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span> CONNECTING TO SERVER...
+            </span>
+        </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-slate-900 border-2 border-green-500 rounded-xl overflow-hidden shadow-lg">
+            <div class="bg-green-500 text-slate-950 text-xs font-black px-3 py-1.5 uppercase tracking-widest">Preview Window</div>
+            <div class="aspect-video bg-black flex items-center justify-center relative">
+                <video id="previewVideo" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div id="previewFallback" class="absolute inset-0 flex items-center justify-center text-slate-500 text-sm bg-slate-950">No Source Selected</div>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 border-2 border-red-600 rounded-xl overflow-hidden shadow-lg">
+            <div class="bg-red-600 text-white text-xs font-black px-3 py-1.5 uppercase tracking-widest">Program (Live Broadcast Output)</div>
+            <canvas id="programCanvas" width="1280" height="720" class="w-full aspect-video bg-black block"></canvas>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col justify-center gap-3">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Controls</h3>
+            <div class="flex gap-2">
+                <button onclick="executeCut()" class="flex-1 py-3 bg-rose-600 hover:bg-rose-500 font-black text-sm tracking-widest rounded-lg transition">CUT</button>
+                <button id="overlayBtn" onclick="toggleOverlay()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 font-black text-sm tracking-widest rounded-lg transition">OVERLAY ON</button>
+            </div>
+        </div>
+
+        <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 col-span-2 grid grid-cols-3 gap-3">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Runs/Wickets</label>
+                <input type="text" id="scoreInput" value="IND 145/4" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white font-mono">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Overs</label>
+                <input type="text" id="oversInput" value="17.3" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white font-mono">
+            </div>
+            <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Batsman</label>
+                <input type="text" id="batsmanInput" value="Virat Kohli 78(45)" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white">
+            </div>
+        </div>
+    </div>
+
+    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Camera Feed Pipeline</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div onclick="selectPreview('cam1')" class="border border-slate-800 bg-slate-900 rounded-lg p-2 cursor-pointer hover:border-slate-700 transition">
+            <div class="text-xs font-bold mb-1 flex justify-between"><span>CAM 1: Ground View</span><span id="status-cam1" class="text-red-500">🔴 OFF</span></div>
+            <video id="v-cam1" autoplay playsinline muted class="w-full aspect-video bg-black rounded object-cover"></video>
+        </div>
+        <div onclick="selectPreview('cam2')" class="border border-slate-800 bg-slate-900 rounded-lg p-2 cursor-pointer hover:border-slate-700 transition">
+            <div class="text-xs font-bold mb-1 flex justify-between"><span>CAM 2: Batsman</span><span id="status-cam2" class="text-red-500">🔴 OFF</span></div>
+            <video id="v-cam2" autoplay playsinline muted class="w-full aspect-video bg-black rounded object-cover"></video>
+        </div>
+        <div onclick="selectPreview('cam3')" class="border border-slate-800 bg-slate-900 rounded-lg p-2 cursor-pointer hover:border-slate-700 transition">
+            <div class="text-xs font-bold mb-1 flex justify-between"><span>CAM 3: Bowler</span><span id="status-cam3" class="text-red-500">🔴 OFF</span></div>
+            <video id="v-cam3" autoplay playsinline muted class="w-full aspect-video bg-black rounded object-cover"></video>
+        </div>
+        <div onclick="with selectPreview('cam4')" class="border border-slate-800 bg-slate-900 rounded-lg p-2 cursor-pointer hover:border-slate-700 transition">
+            <div class="text-xs font-bold mb-1 flex justify-between"><span>CAM 4: Scoreboard</span><span id="status-cam4" class="text-red-500">🔴 OFF</span></div>
+            <video id="v-cam4" autoplay playsinline muted class="w-full aspect-video bg-black rounded object-cover"></video>
+        </div>
+    </div>
+
+    <script>
+        // ⚠️ তোমার রেন্ডার সার্ভারের URL এখানে বসাবে (যেমন: 'wss://your-app.onrender.com')
+        const SERVER_URL = 'ws://localhost:5000'; 
+        
+        let ws = new WebSocket(SERVER_URL);
+        let peerConnections = {};
+        let previewTarget = null;
+        let programTarget = null;
+        let showOverlay = true;
+
+        const canvas = document.getElementById('programCanvas');
+        const ctx = canvas.getContext('2d');
+
+        ws.onopen = () => {
+            document.getElementById('studioStatus').className = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5";
+            document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-emerald-400";
+            document.getElementById('studioStatus').innerText = "STUDIO ONLINE";
+            ws.send(JSON.stringify({ type: 'register_studio' }));
+        };
+
+        ws.onclose = () => {
+            document.getElementById('studioStatus').className = "bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5";
+            document.getElementById('statusDot').className = "w-2 h-2 rounded-full bg-red-400";
+            document.getElementById('studioStatus').innerText = "SERVER DISCONNECTED";
+        };
+
+        ws.onmessage = async (message) => {
+            let data = JSON.parse(message.data);
+            
+            if (data.type === 'offer') {
+                let pc = new RTCPeerConnection({
+                    iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+                });
+                peerConnections[data.cameraId] = pc;
+
+                document.getElementById(`status-${data.cameraId}`).innerText = "🟢 LIVE";
+                document.getElementById(`status-${data.cameraId}`).classList.replace('text-red-500', 'text-emerald-400');
+
+                pc.ontrack = (event) => {
+                    let videoElement = document.getElementById(`v-${data.cameraId}`);
+                    videoElement.srcObject = event.streams[0];
+                };
+
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({ type: 'ice-candidate', targetId: data.cameraId, candidate: event.candidate }));
+                    }
+                };
+
+                await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+                let answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                ws.send(JSON.stringify({ type: 'answer', targetId: data.cameraId, answer }));
+            }
+            else if (data.type === 'ice-candidate' && peerConnections[data.cameraId]) {
+                await peerConnections[data.cameraId].addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.log(e));
+            }
+            else if (data.type === 'disconnect') {
+                document.getElementById(`status-${data.cameraId}`).innerText = "🔴 OFF";
+                document.getElementById(`status-${data.cameraId}`).classList.replace('text-emerald-400', 'text-red-500');
+                document.getElementById(`v-${data.cameraId}`).srcObject = null;
+            }
+        };
+
+        function selectPreview(camId) {
+            previewTarget = camId;
+            let videoSrc = document.getElementById(`v-${camId}`).srcObject;
+            let pVideo = document.getElementById('previewVideo');
+            
+            if(videoSrc) {
+                pVideo.srcObject = videoSrc;
+                document.getElementById('previewFallback').style.display = 'none';
+            } else {
+                pVideo.srcObject = null;
+                document.getElementById('previewFallback').style.display = 'flex';
+            }
+        }
+
+        function executeCut() {
+            if (!previewTarget) return;
+            programTarget = previewTarget;
+        }
+
+        function toggleOverlay() {
+            showOverlay = !showOverlay;
+            document.getElementById('overlayBtn').innerText = showOverlay ? "OVERLAY ON" : "OVERLAY OFF";
+        }
+
+        function renderBroadcast() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (programTarget) {
+                let activeVideo = document.getElementById(`v-${programTarget}`);
+                if (activeVideo && activeVideo.readyState >= 2) {
+                    ctx.drawImage(activeVideo, 0, 0, canvas.width, canvas.height);
+                }
+            } else {
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '30px sans-serif';
+                ctx.fillText('NO LIVE PROGRAM INPUT', 450, 360);
+            }
+
+            if (showOverlay) {
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+                ctx.fillRect(50, canvas.height - 120, 600, 65);
+                ctx.fillStyle = '#f43f5e';
+                ctx.fillRect(50, canvas.height - 120, 8, 65);
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 28px monospace';
+                ctx.fillText(document.getElementById('scoreInput').value, 80, canvas.height - 78);
+
+                ctx.fillStyle = '#e2e8f0';
+                ctx.font = '20px sans-serif';
+                ctx.fillText("OV: " + document.getElementById('oversInput').value, 340, canvas.height - 78);
+
+                ctx.fillStyle = '#3b82f6';
+                ctx.fillRect(470, canvas.height - 120, 3, 65);
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'italic 18px sans-serif';
+                ctx.fillText(document.getElementById('batsmanInput').value, 490, canvas.height - 78);
+            }
+            requestAnimationFrame(renderBroadcast);
+        }
+        renderBroadcast();
+    </script>
+</body>
+</html>
+
