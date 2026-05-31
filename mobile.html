@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wireless Camera Node</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+        <h1 class="text-lg font-black text-rose-500 tracking-wider uppercase mb-1">CBP FIELD NODE</h1>
+        <p class="text-xs text-slate-500 mb-6">Wireless Camera Transmitter</p>
+
+        <div class="mb-4 text-left">
+            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">Select Camera View</label>
+            <select id="camIdSelect" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white focus:outline-none mb-3">
+                <option value="cam1">Camera 1 (Main Ground)</option>
+                <option value="cam2">Camera 2 (Batsman View)</option>
+                <option value="cam3">Camera 3 (Bowler View)</option>
+                <option value="cam4">Camera 4 (Boundary/Score)</option>
+            </select>
+        </div>
+
+        <video id="cameraPreview" autoplay playsinline muted class="w-full aspect-video bg-black rounded-lg mb-6 object-cover border border-slate-800"></video>
+
+        <button id="broadcastBtn" onclick="startCameraStreaming()" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3.5 rounded-xl transition shadow-lg tracking-wide">
+            START STREAMING
+        </button>
+    </div>
+
+    <script>
+        // ⚠️ তোমার রেন্ডার সার্ভারের URL এখানে বসাবে
+        const SERVER_URL = 'ws://localhost:5000'; 
+        
+        let localStream;
+        let pc;
+        let ws;
+
+        async function startCameraStreaming() {
+            const cameraId = document.getElementById('camIdSelect').value;
+            document.getElementById('broadcastBtn').disabled = true;
+            document.getElementById('broadcastBtn').innerText = "LIVE TRANSMITTING...";
+            document.getElementById('broadcastBtn').classList.replace('bg-rose-600', 'bg-emerald-600');
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 1280 }, 
+                        height: { ideal: 720 }, 
+                        facingMode: { ideal: "environment" } // মোবাইলের পিছনের ক্যামেরা অন করবে
+                    },
+                    audio: false
+                });
+                document.getElementById('cameraPreview').srcObject = localStream;
+            } catch (err) {
+                console.error("Camera access failed:", err);
+                alert("Camera অ্যাক্সেস করা যায়নি! সঠিক পারমিশন দাও।");
+                return;
+            }
+
+            ws = new WebSocket(SERVER_URL);
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ type: 'register_camera', cameraId }));
+            };
+
+            ws.onmessage = async (message) => {
+                let data = JSON.parse(message.data);
+                if (data.type === 'answer') {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                } else if (data.type === 'ice-candidate') {
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.log(e));
+                }
+            };
+
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+            });
+            
+            localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({ type: 'ice-candidate', targetId: cameraId, candidate: event.candidate }));
+                }
+            };
+
+            let offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({ type: 'offer', cameraId, offer }));
+        }
+    </script>
+</body>
+</html>
